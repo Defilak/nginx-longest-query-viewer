@@ -9,7 +9,7 @@ if (!$fp) {
 }
 
 //я устал
-const REGEX = '/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s(.+?)\s-\s(?:.+\"GET|POST|PUT|DELETE)\s(.*?(?=\ HT|HTTP\/\d\.\d|\d")).+(\d+(?:\.\d+)?)\s(\d+(?:\.\d+)?)/';
+const REGEX = '/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s(.+?)\s-\s(?:.+\"GET|POST|PUT|DELETE)\s(.*?(?=\ HT|HTTP\/\d\.\d|\d")).+\s(\d+(?:\.\d+)?)\s(\d+(?:\.\d+)?)/';
 
 $count = 0;
 try {
@@ -25,13 +25,9 @@ try {
         //При желании можно и по upstream_response_time
         [, $url, $query, $upstream_response_time, $response_time] = $matches;
 
-        //$result[] = $upstream_response_time;
         update_stats($result, $url . $query, $upstream ? $upstream_response_time : $response_time);
         $count++;
     }
-
-    //rsort($result);
-    //file_put_contents('./a.txt', var_export(array_slice($result, count($result) - 10000, 1000), true));
 
     fclose($fp);
     print_result($result);
