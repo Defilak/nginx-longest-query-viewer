@@ -1,65 +1,61 @@
 <?php
 
 $filename = $argv[1] ?? 'obfuscated.log';
-$res = fopen($filename, 'r');
-if (!$res) {
+$upstream = $argv[2] ?? false;
+
+$fp = fopen($filename, 'r');
+if (!$fp) {
     exit("Не могу открыть файл $filename!");
 }
 
-//$regex = '/^(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s((.+?\s)-\s(?:.+\"GET|POST|PUT|DELETE)\s(.*?(?=\ HTTP\/\d\.\d"))).+(\d+\.\d{0,3})\s(\d+\.\d{0,3})$/';
-//$regex = '/^(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s((.+?\s)-\s(?:.+\"GET|POST|PUT|DELETE)\s(.*?(?=\ HTTP\/\d\.\d"))).+(\d+(?:\.\d+)?)\s(\d+(?:\.\d+)?)$/';
-//$regex = '/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s((.+?\s)-\s(?:.+\"GET|POST|PUT|DELETE)\s(.*?(?=\ HTTP\/\d\.\d|\d"))).+(\d+(?:\.\d+)?)\s(\d+(?:\.\d+)?)/';
-$regex =   '/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s(.+?)\s-\s(?:.+\"GET|POST|PUT|DELETE)\s(.*?(?=\ HT|HTTP\/\d\.\d|\d")).+(\d+(?:\.\d+)?)\s(\d+(?:\.\d+)?)/';
 //я устал
+const REGEX = '/(?:\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s(.+?)\s-\s(?:.+\"GET|POST|PUT|DELETE)\s(.*?(?=\ HT|HTTP\/\d\.\d|\d")).+(\d+(?:\.\d+)?)\s(\d+(?:\.\d+)?)/';
 
-$result = [];
-
+$count = 0;
 try {
-    $count = 0;
-    while (!feof($res)) {
-        $line = fgets($res);
+    $result = [];
+    while (!feof($fp)) {
+        $line = fgets($fp);
         if (empty($line)) continue;
 
-        if (!preg_match($regex, $line, $matches) && check_correction($matches)) {
+        if (!preg_match(REGEX, $line, $matches)) {
             throw new Exception('Parsing error');
         }
 
+        //При желании можно и по upstream_response_time
+        [, $url, $query, $upstream_response_time, $response_time] = $matches;
 
-        [, $url, $query, $_upstream_response_time, $response_time] = $matches;
-
-        save_stats($result, $url . $query, $response_time);
+        //$result[] = $upstream_response_time;
+        update_stats($result, $url . $query, $upstream ? $upstream_response_time : $response_time);
+        $count++;
     }
 
-    fclose($res);
+    //rsort($result);
+    //file_put_contents('./a.txt', var_export(array_slice($result, count($result) - 10000, 1000), true));
+
+    fclose($fp);
     print_result($result);
 } catch (Throwable $ex) {
     print "\e[31m" . $ex->getMessage() . "\n";
-    print "Line: $line\n\e[0m";
+    print "Error in line №$count: \n$line\n\e[0m";
 }
 
-function check_correction($matches)
+function update_stats(&$result, $url, $time)
 {
-    return count($matches) < 4 || count(array_filter($matches, fn($val) => empty($val))) > 0;
-}
-
-function save_stats(&$result, $url, $time)
-{
-    if (count($result) >= 10)
-        array_shift($result);
+    if (isset($result[$url]) && $result[$url] > $time)
+        return;
     $result[$url] = $time;
-    asort($result);
+    arsort($result);
+    if (count($result) > 10) {
+        array_pop($result);
+    }
 }
 
 function print_result($result)
 {
-    $reversed = array_reverse($result);
-    print "Топ 10 тяжелых запросов: \n";
-    foreach ($reversed as $url => $time) {
+    print "Топ 10 тяжелых запросов: \n\n";
+    foreach ($result as $url => $time) {
         $out = strlen($url) > 100 ? substr($url, 0, 100) . "..." : $url;
         print "{$time}c. - $out\n";
     }
 }
-
-exit;
-
-//file_put_contents('./result.txt', var_export($result, true));
